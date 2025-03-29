@@ -1,0 +1,56 @@
+{
+    "model_version": "20250329_162233",
+    "training_date": "2025-03-29T16:22:33.304793",
+    "model_type": "knn",
+    "model_params": {
+        "algorithm": "auto",
+        "n_neighbors": 11,
+        "weights": "uniform"
+    },
+    "feature_list": [
+        "prev_price_change",
+        "is_inside_bar",
+        "consecutive_bullish",
+        "consecutive_bearish",
+        "close_over_sma_20",
+        "close_over_ema_10",
+        "sma_5_direction",
+        "close_to_sma_20_pct",
+        "close_to_ema_20_pct",
+        "macd_above_signal",
+        "stoch_k_above_d",
+        "close_below_bb_lower",
+        "close_round_level",
+        "roc_5",
+        "lower_low",
+        "volume_change_pct",
+        "volume_trend",
+        "price_up_volume_up",
+        "price_down_volume_up",
+        "high_volume"
+    ],
+    "performance_metrics": {
+        "accuracy": 0.485,
+        "f1_score": 0.48756218905472637,
+        "precision": 0.5384615384615384,
+        "recall": 0.44545454545454544,
+        "roc_auc": 0.49414141414141416,
+        "confusion_matrix": [
+            [
+                48,
+                42
+            ],
+            [
+                61,
+                49
+            ]
+        ],
+        "cv_f1_mean": 0.6014352001976808,
+        "cv_f1_std": 0.025852645466259573,
+        "training_time": 0.894137
+    },
+    "preprocessing": {
+        "scaling": false,
+        "imbalance_handling": true
+    }
+}

@@ -17,6 +17,13 @@ from sklearn.utils import resample
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import SelectFromModel
 from imblearn.over_sampling import SMOTE
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier, ExtraTreesClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+from sklearn.tree import DecisionTreeClassifier
 
 # Set up logging
 logging.basicConfig(
@@ -252,9 +259,26 @@ class CandlePredictionModel:
             return RandomForestClassifier(random_state=42)
         elif self.model_type == "gradient_boosting":
             return GradientBoostingClassifier(random_state=42)
+        elif self.model_type == "adaboost":
+            return AdaBoostClassifier(random_state=42)
+        elif self.model_type == "extra_trees":
+            return ExtraTreesClassifier(random_state=42)
+        elif self.model_type == "logistic_regression":
+            return LogisticRegression(random_state=42, max_iter=1000)
+        elif self.model_type == "svm":
+            return SVC(probability=True, random_state=42)
+        elif self.model_type == "knn":
+            return KNeighborsClassifier(n_jobs=-1)
+        elif self.model_type == "neural_network":
+            return MLPClassifier(random_state=42, max_iter=500)
+        elif self.model_type == "qda":
+            return QuadraticDiscriminantAnalysis()
+        elif self.model_type == "decision_tree":
+            return DecisionTreeClassifier(random_state=42)
         else:
             logger.warning(f"Unknown model type: {self.model_type}, defaulting to RandomForest")
             return RandomForestClassifier(random_state=42)
+
     
     def _get_param_grid(self) -> Dict:
         """Get the hyperparameter grid for model tuning based on model_type."""
@@ -275,12 +299,61 @@ class CandlePredictionModel:
                 'min_samples_leaf': [1, 2],
                 'subsample': [0.8, 1.0]
             }
+        elif self.model_type == "adaboost":
+            return {
+                'n_estimators': [50, 100, 200],
+                'learning_rate': [0.01, 0.1, 1.0],
+                'algorithm': ['SAMME', 'SAMME.R']
+            }
+        elif self.model_type == "extra_trees":
+            return {
+                'n_estimators': [50, 100, 200],
+                'max_depth': [None, 10, 20],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4]
+            }
+        elif self.model_type == "logistic_regression":
+            return {
+                'C': [0.1, 1.0, 10.0],
+                'penalty': ['l1', 'l2', 'elasticnet', None],
+                'solver': ['liblinear', 'saga'],
+                'class_weight': [None, 'balanced']
+            }
+        elif self.model_type == "svm":
+            return {
+                'C': [0.1, 1.0, 10.0],
+                'kernel': ['linear', 'rbf', 'poly'],
+                'gamma': ['scale', 'auto', 0.1, 0.01],
+                'class_weight': [None, 'balanced']
+            }
+        elif self.model_type == "knn":
+            return {
+                'n_neighbors': [3, 5, 7, 11],
+                'weights': ['uniform', 'distance'],
+                'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute']
+            }
+        elif self.model_type == "neural_network":
+            return {
+                'hidden_layer_sizes': [(50,), (100,), (50, 50), (100, 50)],
+                'activation': ['relu', 'tanh'],
+                'alpha': [0.0001, 0.001, 0.01],
+                'learning_rate': ['constant', 'adaptive']
+            }
+        elif self.model_type == "qda":
+            return {
+                'reg_param': [0.0, 0.1, 0.5]
+            }
+        elif self.model_type == "decision_tree":
+            return {
+                'max_depth': [None, 5, 10, 15],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4],
+                'criterion': ['gini', 'entropy']
+            }
         else:
             return {
                 'n_estimators': [100],
-                'max_depth': [None],
-                'min_samples_split': [2],
-                'min_samples_leaf': [1]
+                'max_depth': [None]
             }
     
     def train(self, 
@@ -490,7 +563,8 @@ class CandlePredictionModel:
                 scoring='f1'
             )
         
-        self.training_history['cross_val_scores'] = cv_scores.tolist() if isinstance(cv_scores, list) else cv_scores.tolist()
+        self.training_history['cross_val_scores'] = cv_scores if isinstance(cv_scores, list) else cv_scores.tolist()
+
         
         # Feature importance analysis
         feature_imp = self._get_feature_importance()
@@ -535,7 +609,7 @@ class CandlePredictionModel:
             "cv_scores": {
                 "mean": np.mean(cv_scores),
                 "std": np.std(cv_scores),
-                "all": cv_scores.tolist() if isinstance(cv_scores, list) else cv_scores.tolist()
+                "all": cv_scores if isinstance(cv_scores, list) else cv_scores.tolist()
             },
             "feature_importances": feature_imp,
             "training_time": (datetime.datetime.now() - start_time).total_seconds(),

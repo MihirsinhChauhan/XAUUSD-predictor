@@ -1,0 +1,82 @@
+{
+    "model_version": "20250329_155433",
+    "training_date": "2025-03-29T15:54:52.508386",
+    "model_type": "random_forest",
+    "model_params": {
+        "bootstrap": true,
+        "ccp_alpha": 0.0,
+        "class_weight": null,
+        "criterion": "gini",
+        "max_depth": null,
+        "max_features": "sqrt",
+        "max_leaf_nodes": null,
+        "max_samples": null,
+        "min_impurity_decrease": 0.0,
+        "min_samples_leaf": 1,
+        "min_samples_split": 2,
+        "min_weight_fraction_leaf": 0.0,
+        "monotonic_cst": null,
+        "n_estimators": 100,
+        "n_jobs": null,
+        "oob_score": false,
+        "random_state": 42,
+        "verbose": 0,
+        "warm_start": false
+    },
+    "feature_list": [
+        "high_low_diff",
+        "lower_shadow",
+        "prev_price_change",
+        "is_inside_bar",
+        "consecutive_bullish",
+        "close_over_ema_10",
+        "sma_5_direction",
+        "sma_20_direction",
+        "ema_5_direction",
+        "close_to_sma_20_pct",
+        "close_to_ema_20_pct",
+        "rsi_14",
+        "rsi_14_oversold",
+        "rsi_14_overbought",
+        "macd_above_signal",
+        "macd_hist_direction",
+        "stoch_k_above_d",
+        "atr_percent",
+        "adx_strong_trend",
+        "close_above_bb_upper",
+        "close_below_bb_lower",
+        "bullish_pattern",
+        "close_round_level",
+        "roc_5",
+        "overlap_session",
+        "volume_trend",
+        "price_up_volume_up",
+        "price_down_volume_up",
+        "high_volume",
+        "mfi"
+    ],
+    "performance_metrics": {
+        "accuracy": 0.6125,
+        "f1_score": 0.6593406593406593,
+        "precision": 0.6521739130434783,
+        "recall": 0.6666666666666666,
+        "roc_auc": 0.5971428571428572,
+        "confusion_matrix": [
+            [
+                19,
+                16
+            ],
+            [
+                15,
+                30
+            ]
+        ],
+        "cv_f1_mean": 0.931703520961759,
+        "cv_f1_std": 0.01961169978260563,
+        "training_time": 0.276591
+    },
+    "preprocessing": {
+        "scaling": true,
+        "imbalance_handling": true
+    }
+}

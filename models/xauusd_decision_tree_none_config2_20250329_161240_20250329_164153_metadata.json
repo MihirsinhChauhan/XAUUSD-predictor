@@ -1,0 +1,77 @@
+{
+    "model_version": "20250329_164153",
+    "training_date": "2025-03-29T16:41:53.595186",
+    "model_type": "decision_tree",
+    "model_params": {
+        "criterion": "entropy",
+        "max_depth": 5,
+        "min_samples_leaf": 1,
+        "min_samples_split": 5
+    },
+    "feature_list": [
+        "body_to_range_ratio",
+        "upper_shadow",
+        "lower_shadow",
+        "is_bullish",
+        "prev_price_change",
+        "close_vs_prev_low",
+        "is_inside_bar",
+        "is_outside_bar",
+        "consecutive_bullish",
+        "consecutive_bearish",
+        "close_over_sma_20",
+        "close_over_ema_10",
+        "sma_5_direction",
+        "sma_20_direction",
+        "ema_5_direction",
+        "ema_20_direction",
+        "close_to_sma_20_pct",
+        "close_to_ema_20_pct",
+        "rsi_14",
+        "rsi_14_overbought",
+        "macd_above_signal",
+        "macd_hist_direction",
+        "stoch_k_above_d",
+        "stoch_oversold",
+        "stoch_overbought",
+        "close_below_bb_lower",
+        "bullish_pattern",
+        "close_round_level",
+        "roc_5",
+        "higher_high",
+        "lower_low",
+        "european_session",
+        "overlap_session",
+        "volume_ratio_10",
+        "volume_change_pct",
+        "volume_trend",
+        "price_up_volume_up",
+        "price_down_volume_up",
+        "high_volume",
+        "mfi"
+    ],
+    "performance_metrics": {
+        "accuracy": 0.54,
+        "f1_score": 0.5964912280701754,
+        "precision": 0.576271186440678,
+        "recall": 0.6181818181818182,
+        "roc_auc": 0.5185353535353535,
+        "confusion_matrix": [
+            [
+                40,
+                50
+            ],
+            [
+                42,
+                68
+            ]
+        ],
+        "cv_f1_mean": 0.5507941685841018,
+        "cv_f1_std": 0.10691128858854235,
+        "training_time": 1.282539
+    },
+    "preprocessing": {
+        "scaling": false,
+        "imbalance_handling": false
+    }
+}

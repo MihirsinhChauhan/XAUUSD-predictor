@@ -28,7 +28,7 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('train_model.log')
+logger = logging.getLogger('model_trainning.log')
 
 # Modify the train method in CandlePredictionModel to include tqdm
 def train(self, 
@@ -689,7 +689,6 @@ def backtest_only(
         feature_processor=processor,
         window_size=window_size,
         step_size=step_size,
-        show_progress=show_progress
     )
     
     # Generate additional visualizations
@@ -1302,6 +1301,480 @@ def predict_next_candle(
     
     return prediction
 
+def train_multiple_models(
+    data_path: str,
+    output_dir: str = "models",
+    base_name: str = "xauusd_model",
+    test_size: float = 0.2,
+    cv_folds: int = 5,
+    models_to_try: List[str] = None,
+    balance_methods: List[str] = None,
+    feature_configs: List[Dict] = None,
+    metric: str = "f1_score",
+    show_progress: bool = True
+) -> Dict:
+    """
+    Train multiple models with different configurations and select the best one.
+    
+    Args:
+        data_path: Path to CSV file with OHLCV data
+        output_dir: Directory to store model files
+        base_name: Base name for model files
+        test_size: Proportion of data to use for testing
+        cv_folds: Number of cross-validation folds
+        models_to_try: List of model types to try (e.g., ["random_forest", "gradient_boosting"])
+        balance_methods: List of class balancing methods to try (e.g., ["none", "smote", "undersample"])
+        feature_configs: List of feature processor configurations to try
+        metric: Metric to use for model selection ("accuracy", "f1_score", "roc_auc", etc.)
+        show_progress: Whether to show progress bars
+        
+    Returns:
+        Dictionary with results from all models and the best model
+    """
+    import os
+    import pandas as pd
+    import numpy as np
+    import json
+    from tqdm.auto import tqdm
+    from data_processor import DataProcessor
+    from datetime import datetime
+    
+    # Set defaults if not provided
+    if models_to_try is None:
+        models_to_try = ["random_forest", "gradient_boosting"]
+    
+    if balance_methods is None:
+        balance_methods = ["none", "smote"]
+    
+    if feature_configs is None:
+        feature_configs = [
+            {"scale_features": True, "feature_selection": True, "n_features": 30},
+            {"scale_features": True, "feature_selection": True, "n_features": 50},
+            {"scale_features": True, "feature_selection": False}
+        ]
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Load data
+    if show_progress:
+        print(f"Loading data from {data_path}")
+    
+    df = pd.read_csv(data_path)
+    
+    if show_progress:
+        print(f"Data loaded: {len(df)} rows, {len(df.columns)} columns")
+    
+    # Store results for all model configurations
+    all_results = []
+    
+    # Create a unique timestamp for this model selection run
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Initialize counters
+    total_models = len(models_to_try) * len(balance_methods) * len(feature_configs)
+    completed_models = 0
+    
+    if show_progress:
+        print(f"Training {total_models} different model configurations...")
+        progress_bar = tqdm(total=total_models, desc="Overall Progress")
+    
+    # Iterate through all combinations
+    for feature_idx, feature_config in enumerate(feature_configs):
+        # Initialize data processor with current feature config
+        processor = DataProcessor(
+            scale_features=feature_config.get("scale_features", True),
+            feature_selection=feature_config.get("feature_selection", True),
+            n_features=feature_config.get("n_features", 30),
+            handle_missing=feature_config.get("handle_missing", "fill_median"),
+            smooth_outliers=feature_config.get("smooth_outliers", True)
+        )
+        
+        # Prepare features (do this once per feature config)
+        if show_progress:
+            print(f"\nFeature config {feature_idx+1}/{len(feature_configs)}: {feature_config}")
+            print("Preparing features...")
+        
+        X, y, feature_list = processor.prepare_ml_data(df)
+        
+        if show_progress:
+            print(f"Features prepared: {X.shape[0]} samples, {X.shape[1]} features")
+        
+        # Save processor for this configuration
+        processor_path = os.path.join(output_dir, f"{base_name}_config{feature_idx+1}_{timestamp}_processor.pkl")
+        processor.save_processor_state(processor_path)
+        
+        for model_type in models_to_try:
+            for balance_method in balance_methods:
+                # Generate model name based on configuration
+                model_name = f"{base_name}_{model_type}_{balance_method}_config{feature_idx+1}_{timestamp}"
+                
+                if show_progress:
+                    print(f"\nTraining {model_type} with {balance_method} balancing and feature config {feature_idx+1}...")
+                
+                # Initialize model
+                model = CandlePredictionModel(
+                    model_dir=output_dir,
+                    model_name=model_name,
+                    model_type=model_type,
+                    scale_features=False,  # No scaling in model since done in processor
+                    handle_imbalance=(balance_method != "none")
+                )
+                
+                try:
+                    # Train model
+                    results = model.train(
+                        X, y,
+                        feature_list=feature_list,
+                        test_size=test_size,
+                        cv_folds=cv_folds,
+                        optimize_hyperparams=True,
+                        balance_method=balance_method,
+                        show_progress=False  # Disable nested progress bars
+                    )
+                    
+                    # Store results with configuration
+                    model_results = {
+                        "model_name": model_name,
+                        "model_type": model_type,
+                        "balance_method": balance_method,
+                        "feature_config": feature_config,
+                        "processor_path": processor_path,
+                        "metrics": {
+                            "accuracy": results["accuracy"],
+                            "f1_score": results["f1_score"],
+                            "precision": results["precision"],
+                            "recall": results["recall"],
+                            "roc_auc": results["roc_auc"],
+                            "cv_mean": results["cv_scores"]["mean"],
+                            "cv_std": results["cv_scores"]["std"]
+                        },
+                        "model_version": results["model_version"]
+                    }
+                    
+                    all_results.append(model_results)
+                    
+                    if show_progress:
+                        print(f"Trained successfully: {metric}={model_results['metrics'][metric]:.4f}")
+                    
+                except Exception as e:
+                    if show_progress:
+                        print(f"Error training {model_name}: {str(e)}")
+                
+                # Update progress
+                completed_models += 1
+                if show_progress:
+                    progress_bar.update(1)
+    
+    if show_progress:
+        progress_bar.close()
+    
+    # Find the best model based on the specified metric
+    if all_results:
+        best_model = max(all_results, key=lambda x: x["metrics"][metric])
+        
+        # Save summary of all results
+        results_path = os.path.join(output_dir, f"{base_name}_selection_results_{timestamp}.json")
+        with open(results_path, 'w') as f:
+            json.dump({
+                "all_models": all_results,
+                "best_model": best_model,
+                "selection_metric": metric
+            }, f, indent=4)
+        
+        if show_progress:
+            print("\n===== Model Selection Complete =====")
+            print(f"Best model: {best_model['model_name']}")
+            print(f"Model type: {best_model['model_type']}")
+            print(f"Balance method: {best_model['balance_method']}")
+            print(f"Feature config: {best_model['feature_config']}")
+            print(f"Performance ({metric}): {best_model['metrics'][metric]:.4f}")
+            print(f"CV score: {best_model['metrics']['cv_mean']:.4f} ± {best_model['metrics']['cv_std']:.4f}")
+            print(f"Results saved to: {results_path}")
+            print("==================================")
+        
+        return {
+            "all_results": all_results,
+            "best_model": best_model,
+            "results_path": results_path
+        }
+    else:
+        if show_progress:
+            print("No models were successfully trained.")
+        return {"all_results": [], "best_model": None}
+
+
+def compare_models_visually(
+    results_path: str,
+    output_dir: str = "models",
+    metrics: List[str] = None,
+    show_progress: bool = True
+) -> str:
+    """
+    Generate visualizations comparing all trained models.
+    
+    Args:
+        results_path: Path to the JSON file with model selection results
+        output_dir: Directory to store visualizations
+        metrics: List of metrics to visualize (default: accuracy, f1_score, roc_auc, cv_mean)
+        show_progress: Whether to show progress information
+        
+    Returns:
+        Path to the saved visualization file
+    """
+    import os
+    import json
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    
+    # Set default metrics if not provided
+    if metrics is None:
+        metrics = ["accuracy", "f1_score", "roc_auc", "cv_mean"]
+    
+    # Load results
+    if show_progress:
+        print(f"Loading results from {results_path}")
+    
+    with open(results_path, 'r') as f:
+        results = json.load(f)
+    
+    all_models = results.get("all_models", [])
+    best_model = results.get("best_model", {})
+    selection_metric = results.get("selection_metric", "f1_score")
+    
+    if not all_models:
+        if show_progress:
+            print("No models found in results file.")
+        return None
+    
+    # Create a DataFrame from results for easier visualization
+    models_data = []
+    for model in all_models:
+        model_data = {
+            "Model Name": model["model_name"],
+            "Model Type": model["model_type"],
+            "Balance Method": model["balance_method"],
+            "Feature Config": str(model["feature_config"]),
+            # Extract metrics
+            **{metric: model["metrics"].get(metric, 0) for metric in metrics}
+        }
+        models_data.append(model_data)
+    
+    df_models = pd.DataFrame(models_data)
+    
+    # Create visualizations
+    timestamp = os.path.basename(results_path).split("_selection_results_")[1].split(".")[0]
+    viz_path = os.path.join(output_dir, f"model_comparison_{timestamp}.png")
+    
+    plt.figure(figsize=(15, 12))
+    
+    # 1. Overall comparison of selected metric
+    plt.subplot(2, 2, 1)
+    
+    # Sort by the selection metric
+    df_sorted = df_models.sort_values(by=selection_metric, ascending=False)
+    
+    # Create bar colors - highlight the best model
+    colors = ['lightblue'] * len(df_sorted)
+    best_idx = df_sorted["Model Name"].tolist().index(best_model["model_name"]) if best_model else -1
+    if best_idx >= 0:
+        colors[best_idx] = 'orange'
+    
+    # Create the bar chart
+    bars = plt.barh(range(len(df_sorted)), df_sorted[selection_metric], color=colors)
+    plt.yticks(range(len(df_sorted)), [f"{i+1}" for i in range(len(df_sorted))])
+    plt.xlabel(f"{selection_metric.replace('_', ' ').title()}")
+    plt.title(f"Models Ranked by {selection_metric.replace('_', ' ').title()}")
+    
+    # Annotate bars with model names
+    for i, bar in enumerate(bars):
+        plt.text(
+            bar.get_width() + 0.01,
+            bar.get_y() + bar.get_height()/2,
+            f"{df_sorted.iloc[i]['Model Type']}/{df_sorted.iloc[i]['Balance Method']}",
+            va='center'
+        )
+    
+    # 2. Metrics comparison by model type
+    plt.subplot(2, 2, 2)
+    model_types = df_models["Model Type"].unique()
+    
+    metric_by_type = {}
+    for metric in metrics:
+        metric_by_type[metric] = [df_models[df_models["Model Type"] == mt][metric].mean() for mt in model_types]
+    
+    x = range(len(model_types))
+    width = 0.8 / len(metrics)
+    
+    for i, metric in enumerate(metrics):
+        plt.bar([pos + i * width for pos in x], metric_by_type[metric], width=width, label=metric.replace('_', ' ').title())
+    
+    plt.xlabel("Model Type")
+    plt.ylabel("Average Score")
+    plt.title("Performance by Model Type")
+    plt.xticks([pos + width * (len(metrics) - 1) / 2 for pos in x], model_types)
+    plt.legend()
+    
+    # 3. Metrics comparison by balance method
+    plt.subplot(2, 2, 3)
+    balance_methods = df_models["Balance Method"].unique()
+    
+    metric_by_balance = {}
+    for metric in metrics:
+        metric_by_balance[metric] = [df_models[df_models["Balance Method"] == bm][metric].mean() for bm in balance_methods]
+    
+    x = range(len(balance_methods))
+    width = 0.8 / len(metrics)
+    
+    for i, metric in enumerate(metrics):
+        plt.bar([pos + i * width for pos in x], metric_by_balance[metric], width=width, label=metric.replace('_', ' ').title())
+    
+    plt.xlabel("Balance Method")
+    plt.ylabel("Average Score")
+    plt.title("Performance by Balance Method")
+    plt.xticks([pos + width * (len(metrics) - 1) / 2 for pos in x], balance_methods)
+    plt.legend()
+    
+    # 4. Top models details
+    plt.subplot(2, 2, 4)
+    plt.axis('off')
+    
+    # Show details of top 5 models
+    top_models = df_sorted.head(5)
+    text_content = "Top 5 Models:\n\n"
+    
+    for i, (_, model) in enumerate(top_models.iterrows()):
+        text_content += f"{i+1}. {model['Model Type']}/{model['Balance Method']}\n"
+        text_content += f"   Config: {model['Feature Config']}\n"
+        
+        # Add metrics
+        for metric in metrics:
+            text_content += f"   {metric.replace('_', ' ').title()}: {model[metric]:.4f}\n"
+        
+        text_content += "\n"
+    
+    plt.text(0.05, 0.95, text_content, va='top', fontsize=10)
+    
+    # Finish and save
+    plt.tight_layout()
+    plt.savefig(viz_path)
+    plt.close()
+    
+    if show_progress:
+        print(f"Model comparison visualization saved to {viz_path}")
+    
+    return viz_path
+
+
+def get_best_model(
+    data_path: str,
+    results_path: str,
+    processor_path: Optional[str] = None,
+    model_version: Optional[str] = None,
+    show_progress: bool = True
+) -> Dict:
+    """
+    Load the best model from model selection results and make a prediction.
+    
+    Args:
+        data_path: Path to CSV file with OHLCV data
+        results_path: Path to the JSON file with model selection results
+        processor_path: Path to processor state file (override the one in results)
+        model_version: Specific model version to use (override the one in results)
+        show_progress: Whether to show progress information
+        
+    Returns:
+        Dictionary with model info and a sample prediction
+    """
+    import os
+    import json
+    import pandas as pd
+    from data_processor import DataProcessor
+    
+    # Load results
+    if show_progress:
+        print(f"Loading results from {results_path}")
+    
+    with open(results_path, 'r') as f:
+        results = json.load(f)
+    
+    best_model = results.get("best_model", {})
+    
+    if not best_model:
+        if show_progress:
+            print("No best model found in results file.")
+        return None
+    
+    # Determine paths
+    model_dir = os.path.dirname(results_path)
+    model_name = best_model.get("model_name")
+    model_version = model_version or best_model.get("model_version")
+    processor_path = processor_path or best_model.get("processor_path")
+    
+    if show_progress:
+        print(f"Loading best model: {model_name} (version {model_version})")
+    
+    # Load data
+    df = pd.read_csv(data_path)
+    
+    # Load processor
+    if show_progress:
+        print(f"Loading processor from {processor_path}")
+    
+    processor = DataProcessor()
+    if not processor.load_processor_state(processor_path):
+        raise ValueError(f"Failed to load processor from {processor_path}")
+    
+    # Initialize model
+    model = CandlePredictionModel(
+        model_dir=model_dir,
+        model_name=model_name
+    )
+    
+    # Load specific version if provided
+    if model_version:
+        if not model.load_model_version(model_version):
+            raise ValueError(f"Failed to load model version {model_version}")
+    
+    # Get feature list
+    feature_list = model.feature_list
+    if not feature_list:
+        raise ValueError("Model does not have a feature list")
+    
+    # Prepare latest data for prediction
+    latest_features = processor.prepare_latest_for_prediction(df, feature_list)
+    
+    # Make prediction
+    prediction = model.predict_single(latest_features)
+    
+    result = {
+        "model_name": model_name,
+        "model_version": model_version,
+        "model_type": best_model.get("model_type"),
+        "balance_method": best_model.get("balance_method"),
+        "feature_config": best_model.get("feature_config"),
+        "metrics": best_model.get("metrics", {}),
+        "sample_prediction": prediction
+    }
+    
+    if show_progress:
+        print("\n===== Best Model Information =====")
+        print(f"Model name: {result['model_name']}")
+        print(f"Model type: {result['model_type']}")
+        print(f"Balance method: {result['balance_method']}")
+        print(f"Performance metrics:")
+        for metric, value in result['metrics'].items():
+            print(f"  {metric}: {value:.4f}")
+        print("\nSample prediction:")
+        print(f"Direction: {prediction['prediction_label']}")
+        print(f"Signal strength: {prediction['signal_strength']}")
+        print(f"Confidence: {prediction['confidence']:.4f}")
+        print("=================================")
+    
+    return result
+
+    
 
 if __name__ == "__main__":
     import argparse
@@ -1312,6 +1785,12 @@ if __name__ == "__main__":
     parser.add_argument('--name', type=str, default='xauusd_model', help='Base name for model files')
     parser.add_argument('--model-type', type=str, choices=['random_forest', 'gradient_boosting'], 
                       default='random_forest', help='Type of model to train')
+    parser.add_argument('--metric', type=str, default='f1_score', 
+                      choices=['accuracy', 'f1_score', 'precision', 'recall', 'roc_auc', 'cv_mean'],
+                      help='Metric to use for model selection')
+    parser.add_argument('--compare-only', action='store_true', help='Only compare existing models')
+    parser.add_argument('--results-file', type=str, help='Path to existing results JSON file (for --compare-only)')
+    parser.add_argument('--get-best', action='store_true', help='Load the best model and make a prediction')
     parser.add_argument('--optimize', action='store_true', help='Perform hyperparameter optimization')
     parser.add_argument('--balance', action='store_true', help='Handle class imbalance')
     parser.add_argument('--balance-method', type=str, choices=['smote', 'undersample', 'oversample'], 
@@ -1337,13 +1816,11 @@ if __name__ == "__main__":
         # Backtest without training
         backtest_only(
             data_path=args.data,
-            output_dir=args.output,
             model_name=args.name,
             processor_path=args.processor_path,
             model_version=args.model_version,
             window_size=args.window_size,
             step_size=args.step_size,
-            show_progress=show_progress
         )
     elif args.test:
         # Test the model
@@ -1383,16 +1860,69 @@ if __name__ == "__main__":
             threshold=args.threshold,
             show_progress=show_progress
         )
-    else:
-        # Regular training
-        train_xauusd_model(
-            data_path=args.data,
+    
+    elif args.compare_only and args.results_file:
+        # Only generate comparison visualizations
+        compare_models_visually(
+            results_path=args.results_file,
             output_dir=args.output,
-            model_name=args.name,
-            model_type=args.model_type,
-            optimize_hyperparams=args.optimize,
-            handle_imbalance=args.balance,
-            balance_method=args.balance_method,
-            n_features=args.features,
             show_progress=show_progress
         )
+    elif args.get_best and args.results_file:
+        # Load best model and make prediction
+        get_best_model(
+            data_path=args.data,
+            results_path=args.results_file,
+            show_progress=show_progress
+        )
+    else:
+        # Train multiple models
+        # Define model configurations to try
+        models_to_try = [
+            "random_forest",
+            "gradient_boosting",
+            "extra_trees",
+            "adaboost",
+            "logistic_regression",
+            "decision_tree",
+            "knn",
+            "neural_network",
+            "qda"
+        ]
+        balance_methods = ["none", "smote", "undersample"]
+        
+        # Define feature configurations to try
+        feature_configs = [
+            {"scale_features": True, "feature_selection": True, "n_features": 20},
+            {"scale_features": True, "feature_selection": True, "n_features": 40},
+            {"scale_features": True, "feature_selection": False}
+        ]
+        
+        # Run model selection
+        results = train_multiple_models(
+            data_path=args.data,
+            output_dir=args.output,
+            base_name=args.name,
+            models_to_try=models_to_try,
+            balance_methods=balance_methods,
+            feature_configs=feature_configs,
+            metric=args.metric,
+            show_progress=show_progress
+        )
+        
+        # Generate comparison visualizations
+        if results.get("results_path"):
+            compare_models_visually(
+                results_path=results["results_path"],
+                output_dir=args.output,
+                show_progress=show_progress
+            )
+            
+            # Load best model
+            get_best_model(
+                data_path=args.data,
+                results_path=results["results_path"],
+                show_progress=show_progress
+            )
+
+    

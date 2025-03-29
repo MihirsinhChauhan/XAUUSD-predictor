@@ -1,0 +1,57 @@
+{
+    "model_version": "20250329_162218",
+    "training_date": "2025-03-29T16:22:18.913348",
+    "model_type": "logistic_regression",
+    "model_params": {
+        "C": 1.0,
+        "class_weight": null,
+        "penalty": "l1",
+        "solver": "saga"
+    },
+    "feature_list": [
+        "prev_price_change",
+        "is_inside_bar",
+        "consecutive_bullish",
+        "consecutive_bearish",
+        "close_over_sma_20",
+        "close_over_ema_10",
+        "sma_5_direction",
+        "close_to_sma_20_pct",
+        "close_to_ema_20_pct",
+        "macd_above_signal",
+        "stoch_k_above_d",
+        "close_below_bb_lower",
+        "close_round_level",
+        "roc_5",
+        "lower_low",
+        "volume_change_pct",
+        "volume_trend",
+        "price_up_volume_up",
+        "price_down_volume_up",
+        "high_volume"
+    ],
+    "performance_metrics": {
+        "accuracy": 0.49,
+        "f1_score": 0.5363636363636364,
+        "precision": 0.5363636363636364,
+        "recall": 0.5363636363636364,
+        "roc_auc": 0.4859595959595959,
+        "confusion_matrix": [
+            [
+                39,
+                51
+            ],
+            [
+                51,
+                59
+            ]
+        ],
+        "cv_f1_mean": 0.641950861756085,
+        "cv_f1_std": 0.0369268655466743,
+        "training_time": 1.066472
+    },
+    "preprocessing": {
+        "scaling": false,
+        "imbalance_handling": true
+    }
+}
