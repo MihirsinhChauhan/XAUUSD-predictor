@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+streamlit
+pandas
+numpy
+matplotlib
+requests
+MetaTrader5
+scikit-learn
+tqdm
+typer
+imblearn
+matplotlib
