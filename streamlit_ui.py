@@ -108,13 +108,22 @@ if 'services_status' not in st.session_state:
 def fetch_market_data():
     """Fetch market data from the API"""
     try:
-        response = requests.get(f"{API_URL}/market-data")
+        response = requests.get(f"{API_URL}/market-data", timeout=30)  # Add timeout
         if response.status_code == 200:
             data = response.json()
             
+            # Verify data structure
+            if not data or "candles" not in data:
+                st.error("Received invalid data structure from API")
+                return False
+                
             # Convert to DataFrame
             candles = pd.DataFrame(data["candles"])
             
+            if len(candles) == 0:
+                st.warning("Received empty candles data from API")
+                return False
+                
             # Convert time strings to datetime
             candles['time'] = pd.to_datetime(candles['time'])
             
@@ -122,10 +131,20 @@ def fetch_market_data():
             st.session_state.last_update = datetime.now()
             
             return True
-        else:
+        elif response.status_code == 404:
             # Try to trigger a fetch if data is not available
-            requests.post(f"{API_URL}/market-data/fetch")
+            fetch_response = requests.post(f"{API_URL}/market-data/fetch", timeout=30)
+            st.info(f"Triggered market data fetch: {fetch_response.json().get('message', 'No message')}")
             return False
+        else:
+            st.error(f"API error: {response.status_code} - {response.text}")
+            return False
+    except requests.exceptions.Timeout:
+        st.error("API request timed out. Server might be busy.")
+        return False
+    except requests.exceptions.ConnectionError:
+        st.error("Connection error. API server might be down.")
+        return False
     except Exception as e:
         st.error(f"Error fetching market data: {str(e)}")
         return False
@@ -137,14 +156,37 @@ def make_prediction(threshold=0.5, model_version=None):
         if model_version and model_version != "Latest":
             params["model_version"] = model_version
             
-        response = requests.post(f"{API_URL}/predict", json=params)
+        response = requests.post(f"{API_URL}/predict", json=params, timeout=120)  # Longer timeout for predictions
+        
         if response.status_code == 200:
             prediction = response.json()
+            
+            # Validate prediction structure
+            if not isinstance(prediction, dict) or "direction" not in prediction:
+                st.error(f"Invalid prediction format: {prediction}")
+                return False
+                
             st.session_state.prediction = prediction
             return True
-        else:
-            st.error(f"Error getting prediction: {response.json()['detail']}")
+        elif response.status_code == 404:
+            # Special handling for 404 (data not available)
+            st.warning("Market data not available yet. Please fetch data first.")
             return False
+        else:
+            error_detail = "Unknown error"
+            try:
+                error_detail = response.json().get('detail', 'Unknown error')
+            except:
+                error_detail = response.text
+            
+            st.error(f"Error getting prediction: {error_detail}")
+            return False
+    except requests.exceptions.Timeout:
+        st.error("Prediction request timed out. The model might be processing a large dataset.")
+        return False
+    except requests.exceptions.ConnectionError:
+        st.error("Connection error. API server might be down.")
+        return False
     except Exception as e:
         st.error(f"Error making prediction: {str(e)}")
         return False
@@ -152,17 +194,23 @@ def make_prediction(threshold=0.5, model_version=None):
 def check_api_health():
     """Check the API health status"""
     try:
-        response = requests.get(f"{API_URL}/health")
+        response = requests.get(f"{API_URL}/health", timeout=30)
         if response.status_code == 200:
             st.session_state.services_status = response.json()
             return True
         else:
-            st.error("API health check failed")
+            st.error(f"API health check failed: {response.status_code}")
             return False
+    except requests.exceptions.Timeout:
+        st.error("API health check timed out")
+        return False
+    except requests.exceptions.ConnectionError:
+        st.error("Connection error. API server might be down.")
+        return False
     except Exception as e:
         st.error(f"Error connecting to API: {str(e)}")
         return False
-
+    
 def get_model_versions():
     """Get available model versions"""
     try:
@@ -354,6 +402,39 @@ with st.sidebar:
             max_value=300, 
             value=st.session_state.refresh_interval
         )
+
+    with st.expander("Debug Information"):
+        if st.button("Force Refresh Data"):
+            st.session_state.last_update = None
+            st.experimental_rerun()
+            
+        st.markdown("#### API Status")
+        if st.button("Check API Status"):
+            try:
+                response = requests.get(f"{API_URL}/health", timeout=5)
+                st.json(response.json())
+            except Exception as e:
+                st.error(f"API Error: {str(e)}")
+                
+        st.markdown("#### Connection Info")
+        st.code(f"API URL: {API_URL}")
+        
+        # Add a direct data fetch button
+        if st.button("Direct Fetch"):
+            try:
+                response = requests.get(f"{API_URL}/market-data", timeout=10)
+                if response.status_code == 200:
+                    data_sample = response.json()
+                    if "candles" in data_sample and len(data_sample["candles"]) > 0:
+                        st.success(f"Successfully fetched {len(data_sample['candles'])} candles")
+                        st.write("First candle:", data_sample["candles"][0])
+                    else:
+                        st.warning("Received empty or invalid data")
+                else:
+                    st.error(f"Failed with status {response.status_code}")
+                    st.text(response.text)
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
 # Main content
 st.markdown('<div class="main-header">📈 XAUUSD Prediction Dashboard</div>', unsafe_allow_html=True)

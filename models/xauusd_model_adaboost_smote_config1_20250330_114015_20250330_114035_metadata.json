@@ -1,0 +1,66 @@
+{
+    "model_version": "20250330_114035",
+    "training_date": "2025-03-30T11:40:35.274521",
+    "model_type": "adaboost",
+    "model_params": {
+        "algorithm": "SAMME",
+        "learning_rate": 0.1,
+        "n_estimators": 200
+    },
+    "feature_list": [
+        "body_to_range_ratio",
+        "lower_shadow",
+        "prev_price_change",
+        "is_inside_bar",
+        "consecutive_bullish",
+        "consecutive_bearish",
+        "close_over_sma_20",
+        "close_over_ema_10",
+        "sma_5_direction",
+        "sma_20_direction",
+        "ema_5_direction",
+        "ema_20_direction",
+        "close_to_sma_20_pct",
+        "close_to_ema_20_pct",
+        "rsi_14_overbought",
+        "macd_above_signal",
+        "macd_hist_direction",
+        "stoch_k_above_d",
+        "close_below_bb_lower",
+        "close_round_level",
+        "roc_5",
+        "higher_high",
+        "lower_low",
+        "european_session",
+        "volume_ratio_10",
+        "volume_change_pct",
+        "volume_trend",
+        "price_up_volume_up",
+        "price_down_volume_up",
+        "high_volume"
+    ],
+    "performance_metrics": {
+        "accuracy": 0.57,
+        "f1_score": 0.5904761904761905,
+        "precision": 0.62,
+        "recall": 0.5636363636363636,
+        "roc_auc": 0.5391919191919192,
+        "confusion_matrix": [
+            [
+                52,
+                38
+            ],
+            [
+                48,
+                62
+            ]
+        ],
+        "cv_f1_mean": 0.6964132031791566,
+        "cv_f1_std": 0.011838237452012982,
+        "training_time": 16.678305
+    },
+    "preprocessing": {
+        "scaling": false,
+        "imbalance_handling": true
+    }
+}

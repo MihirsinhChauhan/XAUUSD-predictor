@@ -1,0 +1,21 @@
+{
+  "overall_accuracy": 0,
+  "windows_count": 0,
+  "predictions_count": 0,
+  "window_results": [],
+  "trading_performance": {
+    "total_return": 0,
+    "win_rate": 0,
+    "trades_count": 0,
+    "profit_factor": 0,
+    "profitable_trades": 0,
+    "losing_trades": 0,
+    "cumulative_returns": []
+  },
+  "model_info": {
+    "model_name": "xauusd_model_adaboost_none_config1",
+    "model_version": "20250330_114017",
+    "window_size": 500,
+    "step_size": 100
+  }
+}
